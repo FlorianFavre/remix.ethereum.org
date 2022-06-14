@@ -28,6 +28,7 @@ contract Voting is Ownable {
     WorkflowStatus status;
     //id du gagnant
     uint winningProposalId;
+    bool egalite;
 
     event VoterRegistered(address voterAddress); 
     event WorkflowStatusChange(WorkflowStatus previousStatus, WorkflowStatus newStatus);
@@ -39,8 +40,9 @@ contract Voting is Ownable {
     event WorkflowStatusView(string statusWas);
     event WinnerIs(uint winningPropID);
     event WinnerProposalIs(string proposalWin);
+    event VotingNull(string result);
 
-    constructor() {
+    constructor(){
 
         votantArray.push(owner());//le owner a le droit de voter et de faire des propositions
         votantArray.push(0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2);
@@ -60,7 +62,15 @@ contract Voting is Ownable {
         winningProposalId = 0;
         status = WorkflowStatus.RegisteringVoters;
         //je rajoute le vote nul en indice 0 car pour chaque votant votedProposalId étant initialisé à 0 on ne pouvait pas savoir si un votant avait effectivement voter pour la proposition zero  
-        proposalArr.push(Proposal("Nul",0));
+        proposalArr.push(Proposal("Null",0));
+        egalite = false;
+    }
+
+    modifier verifiedAddress(){
+        require(
+            votantMap[msg.sender].isRegistered == true
+        );
+        _;
     }
 
     //ajoute un votant
@@ -74,10 +84,11 @@ contract Voting is Ownable {
     function Admin1RegisteringVoters() public onlyOwner{
 
         if(status != WorkflowStatus.RegisteringVoters)
-            revert("Not the moment for registering votes");
+            revert("Not the time for registering votes");
 
         //parcours votantArray
         for(uint i = 0; i < votantArray.length; i++){
+
             addVoter(votantArray[i]);
         }
         status = WorkflowStatus.ProposalsRegistrationStarted;
@@ -86,22 +97,21 @@ contract Voting is Ownable {
     }
 
     //les votent soumettent une proposition
-    function submitProposal (string memory _proposalStr) public payable{
+    function submitProposal (string memory _proposalStr) public payable verifiedAddress{
 
-        if(status == WorkflowStatus.ProposalsRegistrationStarted && votantMap[msg.sender].isRegistered == true){
+        if(status != WorkflowStatus.ProposalsRegistrationStarted)
+            revert("Not the time for submit a proposal");
 
-            proposalArr.push(Proposal(_proposalStr, 0));
-            emit ProposalRegistered(proposalArr.length);        
-        }else{
-            revert("Not the good account OR not the moment for submit a proposal");
-        }
+        proposalArr.push(Proposal(_proposalStr, 0));
+        emit ProposalRegistered(proposalArr.length);        
+
     }
 
     //l'admin arrête la phase de proposition
     function Admin2ProposalsRegistrationEnded() public onlyOwner{
 
         if(status != WorkflowStatus.ProposalsRegistrationStarted)
-            revert("Not the moment for ProposalsRegistrationStarted");
+            revert("Not the time for end the proposal registration");
 
         status = WorkflowStatus.ProposalsRegistrationEnded;
         emit WorkflowStatusChange(WorkflowStatus.ProposalsRegistrationStarted, WorkflowStatus.ProposalsRegistrationEnded);
@@ -112,33 +122,37 @@ contract Voting is Ownable {
     function Admin3VotingSessionStarted() public onlyOwner{
 
         if(status != WorkflowStatus.ProposalsRegistrationEnded)
-            revert("Not the moment for ProposalsRegistrationEnded");
-
+            revert("Not the time for start voting session");
 
         status = WorkflowStatus.VotingSessionStarted;
         emit WorkflowStatusChange(WorkflowStatus.ProposalsRegistrationEnded, WorkflowStatus.VotingSessionStarted);
         
     }
 
-    //L'électeur choisie sa proposition en donnant l'id voulue
-    function chooseProposal(uint _idVote) public {
+    //L'électeur choisi sa proposition en donnant l'id voulu
+    function chooseProposal(uint _idVote) public verifiedAddress{
 
-        if(status == WorkflowStatus.VotingSessionStarted && votantMap[msg.sender].hasVoted == false && votantMap[msg.sender].isRegistered == true){
+        if(status != WorkflowStatus.VotingSessionStarted)
+            revert("Not the good time for start the session of voting");
+        
+        if(votantMap[msg.sender].hasVoted == true)
+            revert("The user has already voted");
 
-            votantMap[msg.sender].hasVoted = true;
-            votantMap[msg.sender].votedProposalId = _idVote;
-            emit Voted(msg.sender, _idVote);
-            proposalArr[_idVote].voteCount ++;
-        }else{
-            revert("Choose proposal not accepted");
-        }
+        if(_idVote >= proposalArr.length)
+            revert("Your number of proposal was not good");
+
+        votantMap[msg.sender].hasVoted = true;
+        votantMap[msg.sender].votedProposalId = _idVote;
+        emit Voted(msg.sender, _idVote);
+        proposalArr[_idVote].voteCount ++;
+        
     }
 
     //l'admin arrête la session des votes
     function Admin4VotingSessionEnded() public onlyOwner{
 
         if(status != WorkflowStatus.VotingSessionStarted)
-            revert("Not the moment for VotingSessionStarted");
+            revert("Not the time for end the voting session");
 
         status = WorkflowStatus.VotingSessionEnded;
         emit WorkflowStatusChange(WorkflowStatus.VotingSessionStarted, WorkflowStatus.VotingSessionEnded);
@@ -149,29 +163,58 @@ contract Voting is Ownable {
     function Admin5VotesTallied() public onlyOwner{
 
         if(status != WorkflowStatus.VotingSessionEnded)
-            revert("Not the moment for VotingSessionEnded");
+            revert("Not the time for tall the vote");
+        
+        for(uint i = 0; i < proposalArr.length; i++){
 
-        status = WorkflowStatus.VotesTallied;
-        emit WorkflowStatusChange(WorkflowStatus.VotingSessionEnded, WorkflowStatus.VotesTallied);
+            if(proposalArr[i].voteCount > proposalArr[winningProposalId].voteCount)
+                winningProposalId = i;
+        }
 
         for(uint i = 0; i < proposalArr.length; i++){
 
-            if(proposalArr[i].voteCount > proposalArr[winningProposalId].voteCount){
-
-                winningProposalId = i;
-            }
+            if(winningProposalId == 0)//si aucun vote n'a été enregistré
+                break;
+            if(i == winningProposalId)
+                continue;
+            if(proposalArr[i].voteCount == proposalArr[winningProposalId].voteCount)
+                egalite = true;
         }
+        if(egalite){
 
-        emit WinnerIs(winningProposalId);
+            for(uint i = 0; i < votantArray.length; i++){
+
+                emit VotantView(votantArray[i], votantMap[votantArray[i]].votedProposalId);
+            }
+            winningProposalId = 0;
+            emit VotingNull("An equality was here between the proposal");
+        }
         
+        status = WorkflowStatus.VotesTallied;
+        emit WorkflowStatusChange(WorkflowStatus.VotingSessionEnded, WorkflowStatus.VotesTallied);
+        
+        if(winningProposalId != 0){
+
+            emit WinnerIs(winningProposalId);
+        }else{
+
+            emit VotingNull("No vote for the election or all the vote was null");
+        }
     }
 
     function getWinner() public {
 
         if(status != WorkflowStatus.VotesTallied)
-            revert("Not the moment for VotesTallied");
+            revert("Not the time for VotesTallied");
+
+        if(egalite){
+
+            emit VotingNull("An equality was here between the proposal");
+        }else{
 
             emit WinnerProposalIs(proposalArr[winningProposalId].description);
+        }
+
         
     }
 
@@ -183,34 +226,30 @@ contract Voting is Ownable {
     }
 
     //voir les proprositions
-    function viewProposal() public{   
-
-        if(votantMap[msg.sender].isRegistered != true)
-            revert("Not the good user");
+    function viewProposal() public verifiedAddress{   
 
         for(uint i = 0; i < proposalArr.length; i++){
+
             emit ProposalView(i, proposalArr[i].description);
         }
         
     }
 
     //voir les résultats des votes, pour ne pas influencer les votants nous ne pouvons pas voir les votes faits tant qu'ils ne sont pas cloturés
-    function viewVotes() public{
-
-        if(votantMap[msg.sender].isRegistered != true)
-            revert("Not the good user");
+    function viewVotes() public verifiedAddress{
         
-        if(status != WorkflowStatus.VotingSessionEnded || status != WorkflowStatus.VotesTallied)
-            revert("Not the moment for viewVotes");
+        if(status == WorkflowStatus.RegisteringVoters || status == WorkflowStatus.ProposalsRegistrationStarted || status == WorkflowStatus.ProposalsRegistrationEnded || status == WorkflowStatus.VotingSessionStarted)
+            revert("Not the time for viewVotes");
 
         for(uint i = 0; i < votantArray.length; i++){
+
             emit VotantView(votantArray[i], votantMap[votantArray[i]].votedProposalId);
         }
         
     }
 
     //voir où nous en sommes du status du vote
-    function viewStatus() public{
+    function viewStatus() public verifiedAddress{
 
         if(status == WorkflowStatus.RegisteringVoters)
             emit WorkflowStatusView("RegisteringVoters");
