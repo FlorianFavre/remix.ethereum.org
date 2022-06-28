@@ -14,7 +14,9 @@ contract('Voting2', accounts => {
     describe("tests pour l'enregistrement des votants", function () {
 
         beforeEach(async function () {
+
             votingInstance = await Vote.new({from:owner});
+
         });
 
         it("WorkflowStatus equal to RegisteringVoters", async () => {
@@ -40,22 +42,23 @@ contract('Voting2', accounts => {
     describe("tests pour l'enregistrement des votants", function () {
 
         beforeEach(async function () {
+
             votingInstance = await Vote.new({from:owner});
+            await votingInstance.addVoter(voter1);
+            await votingInstance.startProposalsRegistering({from:owner});
+
         });
+        
 
         it("addProposal empty was test", async () => {
 
-            await votingInstance.addVoter(voter1);
-            await votingInstance.startProposalsRegistering({from:owner});
             await expectRevert(votingInstance.addProposal("", {from:voter1}), 'Vous ne pouvez pas ne rien proposer');
 
         });
         
         it("good addProposal was accept", async () => {
-
-            await votingInstance.addVoter(voter2);
-            await votingInstance.startProposalsRegistering({from:owner});
-            const resAddV = await votingInstance.addProposal("Lucky", {from:voter2});
+            
+            const resAddV = await votingInstance.addProposal("Lucky", {from:voter1});
             expectEvent(resAddV, 'ProposalRegistered', { 
                 proposalId: new BN(0),
             });
@@ -66,12 +69,10 @@ contract('Voting2', accounts => {
 
     describe("test complet", function () {
 
-        beforeEach(async function () {
-            votingInstance = await Vote.new({from:owner});
-        });
+        before(async function () {
 
-        it("test vote have a winner", async () => {
-
+            votingInstance = await Vote.deployed({from:owner});
+            expect((await votingInstance.workflowStatus()).toString()).to.equal(Vote.WorkflowStatus.RegisteringVoters.toString());
             await votingInstance.addVoter(voter1);
             await votingInstance.addVoter(voter2);
             await votingInstance.addVoter(accounts[3]);
@@ -79,17 +80,25 @@ contract('Voting2', accounts => {
             await votingInstance.addVoter(accounts[5]);
             await votingInstance.addVoter(accounts[6]);
             await votingInstance.addVoter(accounts[7]);
-            
+
+        });
+
+
+        it("test vote have a winner", async () => {
+                        
             await votingInstance.startProposalsRegistering({from:owner});
+
+            expect((await votingInstance.workflowStatus()).toString()).to.equal(Vote.WorkflowStatus.ProposalsRegistrationStarted.toString());
             await votingInstance.addProposal("Premiere proposition", {from:voter1});
             await votingInstance.addProposal("Seconde proposition", {from:voter2});
             await votingInstance.addProposal("Troisieme proposition", {from:accounts[3]});
-            await votingInstance.addProposal("Quatrième proposition", {from:accounts[4]});
-
-            
+            await votingInstance.addProposal("Quatrième proposition", {from:accounts[4]});            
             await votingInstance.endProposalsRegistering({from:owner});
-            await votingInstance.startVotingSession({from:owner});
 
+            expect((await votingInstance.workflowStatus()).toString()).to.equal(Vote.WorkflowStatus.ProposalsRegistrationEnded.toString());
+            await votingInstance.startVotingSession({from:owner});
+            
+            expect((await votingInstance.workflowStatus()).toString()).to.equal(Vote.WorkflowStatus.VotingSessionStarted.toString());
             await votingInstance.setVote(0, {from:voter1});
             await votingInstance.setVote(0, {from:voter2});
             await votingInstance.setVote(1, {from:accounts[3]});
@@ -102,9 +111,13 @@ contract('Voting2', accounts => {
             expect((await votingInstance.workflowStatus()).toString()).to.equal(Vote.WorkflowStatus.VotingSessionEnded.toString());
             
             await votingInstance.tallyVotes({from:owner});
-            expect( await votingInstance.winningProposalID.call()).to.be.bignumber.equal(new BN(3));
 
         });
+
+        after( async function (){
+            expect( await votingInstance.winningProposalID.call()).to.be.bignumber.equal(new BN(3));
+            
+        })
 
     });
 
