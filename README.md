@@ -7,7 +7,15 @@ Nous allons ici lire les tests pour Truffle réalisées sur le fichier testVotin
 - expectEvent
 - expectRevert
 
-L'instanciation du contrat est réalisée au préalable lors d'un *beforeEach*
+Nous commençons par initialiser les variables
+```js
+const owner = accounts[0];
+const voter1 = accounts[1];
+const voter2 = accounts[2];
+let VotingInstance;
+```
+    
+L'instanciation du contrat est réalisée au préalable lors d'un *beforeEach* pour chaque **Describe**. c'est neww qui a été utilisé car nous partons d'un nouveau contrat à chaque fois pour être sûr de l'instanciation que nous manipulons dans chaque test.
 ```js
 beforeEach(async function () {
     votingInstance = await Vote.new({from:owner});
@@ -18,7 +26,10 @@ beforeEach(async function () {
 
 - Test complet jusqu'à la désignation du gagnant attendu
 
-## Expect
+# 1. Premier Describe
+Tests pour l'enregistrement des votants
+
+### Expect
 - WorkflowStatus equal to RegisteringVoters
 
 Si le statuts de l'application de vote, au moment de la création, permet d'enregistrer les votants nous avons un retour positif de cette fonction Expect.
@@ -28,11 +39,11 @@ it("WorkflowStatus equal to RegisteringVoters", async () => {
 });
 ```
 Nous testons ici l'égalité entre l'objet de type enum **workflowStatus** lié à l'instance de vote **votingInstance** correspond en tant que chaine de caractère à l'état **RegisteringVoters** lui aussi converti en chaine de caractère. 
-À noter que ces éléments  doivent être convertis car sinon ils ne peuvent être comparés.
+À noter que ces éléments  doivent être convertis en chaine de caractères, sinon ils ne peuvent être comparés.
 
 
 
-## expectEvent
+### expectEvent
 
 Nous testons ici l’évènement qui apparait lors de l'appel de la fonction **addVoter**
 
@@ -50,8 +61,11 @@ On appelle la fonction (stocké dans la constante *resAddV*) et la passe en para
 
 Le compte enregistré correspond par son adresse à celui donné au départ, le test est réussi.
 
+# 2. Deuxième Describe
 
-## expectRevert
+Tests pour l'enregistrement des votants
+
+### expectRevert
 
 ```js
 it("addProposal empty was test", async () => {
@@ -89,7 +103,11 @@ Et c'est une réussite
  ✔ good addProposal was accept (301ms)
 ```
 
-# Test de l'application jusqu'à désignation d'un gagnant
+# 3. Troisième Describe
+
+Test complet
+
+### Test de l'application jusqu'à désignation d'un gagnant
 
 J'exécute donc toutes les fonctions de l'application pour pouvoir vérifier l'ensemble du processus de vote.
 Elles sont découpées comme suit :
@@ -132,6 +150,12 @@ await votingInstance.setVote(3, {from:accounts[7]});
 ```js
 await votingInstance.endVotingSession({from:owner});
 await votingInstance.tallyVotes({from:owner});
-expect( await votingInstance.winningProposalID.call()).to.be.bignumber.equal(new BN(3));
 ```
-Le gagnant correspond à 3 dans l'indice du tableau, c'est à dire à **Quatrième proposition** le test s'est correctement déroulé.
+
+J'utilise ensuite un after pour tester la dernière vérification, que le gagnant correspond à 3 dans l'indice du tableau, c'est à dire à **Quatrième proposition**, le test s'est correctement déroulé.
+```js
+after( async function (){
+    expect( await votingInstance.winningProposalID.call()).to.be.bignumber.equal(new BN(3));
+})
+```
+J'ai aussi changé le chiffre 3 avec 2 pour vérifier que l'erreur apparraissait.
