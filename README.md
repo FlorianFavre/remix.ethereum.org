@@ -30,7 +30,6 @@ it("WorkflowStatus equal to RegisteringVoters", async () => {
 Nous testons ici l'égalité entre l'objet de type enum **workflowStatus** lié à l'instance de vote **votingInstance** correspond en tant que chaine de caractère à l'état **RegisteringVoters** lui aussi converti en chaine de caractère. 
 À noter que ces éléments  doivent être convertis car sinon ils ne peuvent être comparés.
 
-Ce test est ici un succès.
 
 
 ## expectEvent
@@ -49,7 +48,8 @@ Nous prenons comme paramètre de fonction le second compte fourni par l'environn
 
 On appelle la fonction (stocké dans la constante *resAddV*) et la passe en paramètre ainsi que le nom de l'event souhaité *VoterRegistered* en indiquant le nom de la variable *voterAddress* qui est présent dans l'event ainsi que la donnée de départ *accounts[1]* pour vérifier que les informations correspondent bien.
 
-Ce test est ici un succès.
+Le compte enregistré correspond par son adresse à celui donné au départ, le test est réussi.
+
 
 ## expectRevert
 
@@ -57,7 +57,7 @@ Ce test est ici un succès.
 it("addProposal empty was test", async () => {
     await votingInstance.addVoter(accounts[1]);
     await votingInstance.startProposalsRegistering({from:owner});
-    await expectRevert(votingInstance.addProposal("", {from:accounts[1]}), 'vous ne pouvez pas mettre une valeur nulle');
+    await expectRevert(votingInstance.addProposal("", {from:accounts[1]}), 'Vous ne pouvez pas ne rien proposer');
 });
 ```
 
@@ -69,22 +69,7 @@ Je désire tester ce *require* avec **expectRevert** qui est présent dans Contr
 ```js
 require(keccak256(abi.encode(_desc)) != keccak256(abi.encode("")), 'Vous ne pouvez pas ne rien proposer');
 ```
-Je lui passe donc une proposition vide qui revient logiquement en failed dans le terminal
-```js
-Contract: Voting2
-   test complet
-     addProposal empty was test:
-
-  Wrong kind of exception received
-  + expected - actual
-
-  -Vous ne pouvez pas ne rien proposer -- Reason given: Vous ne pouvez pas ne rien proposer.
-  +vous ne pouvez pas mettre une valeur nulle
-  
-  at expectException (/home/fiurino/node_modules/@openzeppelin/test-helpers/src/expectRevert.js:20:30)
-  at expectRevert (/home/fiurino/node_modules/@openzeppelin/test-helpers/src/expectRevert.js:75:3)
-  at Context.<anonymous> (test/testVoting.js:37:13)
-```
+Je lui passe donc une proposition vide qui revient logiquement en success dans le terminal
 
 - Test expectEvent pour vérifier la réussite
 Je teste ensuite si en envoyant une proposition non nulle pour que le test fonctionne
@@ -149,4 +134,4 @@ await votingInstance.endVotingSession({from:owner});
 await votingInstance.tallyVotes({from:owner});
 expect( await votingInstance.winningProposalID.call()).to.be.bignumber.equal(new BN(3));
 ```
-Si le gagnant correspond à 3 dans l'indice du tableau, c'est à dire à **Quatrième proposition** c'est que le test s'est correctement déroulé
+Le gagnant correspond à 3 dans l'indice du tableau, c'est à dire à **Quatrième proposition** le test s'est correctement déroulé.
